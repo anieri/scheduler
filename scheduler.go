@@ -47,13 +47,13 @@ func (sched *Scheduler) Add(interval time.Duration, job ScheduleJob) {
 	})
 }
 
-func (sched *Scheduler) Run() {
+func (sched *Scheduler) Run(rate int) {
 	sched.log.Info("scheduler.run")
 	for _, job := range sched.jobs {
 		job.last = time.Now()
 	}
 
-	rl := ratelimit.New(1)
+	rl := ratelimit.New(rate)
 	for {
 		now := rl.Take()
 
