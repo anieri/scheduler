@@ -19,10 +19,13 @@ type schedule struct {
 
 type Scheduler struct {
 	jobs []*schedule
+	stop chan chan struct{}
 }
 
 func New() *Scheduler {
-	return &Scheduler{}
+	return &Scheduler{
+		stop: make(chan chan struct{}, 1),
+	}
 }
 
 func (sched *Scheduler) Add(interval time.Duration, job ScheduleJob) {
@@ -33,18 +36,28 @@ func (sched *Scheduler) Run() {
 	for _, job := range sched.jobs {
 		(*job).last = time.Now()
 	}
+
 	rl := ratelimit.New(1)
 	for {
 		now := rl.Take()
 
-		for _, job := range sched.jobs {
-			if now.Before(job.last.Add(job.interval)) {
-				continue
+		select {
+		case stopMessage := <-sched.stop:
+			stopMessage <- struct{}{}
+
+		default:
+			for _, job := range sched.jobs {
+				if now.Before(job.last.Add(job.interval)) {
+					continue
+				}
+				go job.job.Run(now)
 			}
-			go job.job.Run(now)
 		}
 	}
 }
 
 func (sched *Scheduler) Stop() {
+	stopMessage := make(chan struct{}, 1)
+	sched.stop <- stopMessage
+	<-stopMessage
 }
