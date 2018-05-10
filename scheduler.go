@@ -3,6 +3,7 @@ package scheduler
 import (
 	"time"
 
+	"go.uber.org/atomic"
 	"go.uber.org/ratelimit"
 )
 
@@ -15,6 +16,8 @@ type schedule struct {
 	job      ScheduleJob
 	interval time.Duration
 	last     time.Time
+
+	running *atomic.Bool
 }
 
 type Scheduler struct {
@@ -29,12 +32,17 @@ func New() *Scheduler {
 }
 
 func (sched *Scheduler) Add(interval time.Duration, job ScheduleJob) {
-	(*sched).jobs = append(sched.jobs, &schedule{job, interval, time.Now()})
+	(*sched).jobs = append(sched.jobs, &schedule{
+		job,
+		interval,
+		time.Now(),
+		atomic.NewBool(false),
+	})
 }
 
 func (sched *Scheduler) Run() {
 	for _, job := range sched.jobs {
-		(*job).last = time.Now()
+		job.last = time.Now()
 	}
 
 	rl := ratelimit.New(1)
@@ -57,8 +65,15 @@ func (sched *Scheduler) Run() {
 }
 
 func (sched *Scheduler) runJob(job *schedule, now time.Time) {
-	(*job).last = now
-	if err := job.job.Run(now); err != nil {
+	job.last = now
+	if job.running.Load() {
+		// TODO: logger
+		return
+	}
+	job.running.Store(true)
+	err := job.job.Run(now)
+	job.running.Store(false)
+	if err != nil {
 		// TODO: logger
 		return
 	}
