@@ -72,7 +72,19 @@ func (sched *Scheduler) Run() {
 	}
 }
 
+func (sched *Scheduler) recover() {
+	if r := recover(); r != nil {
+		if err, ok := r.(error); ok {
+			sched.log.Error("job.panic", zap.Error(err))
+		} else {
+			sched.log.Error("job.panic", zap.Any("error", r))
+		}
+	}
+}
+
 func (sched *Scheduler) runJob(job *schedule, now time.Time) {
+	defer sched.recover()
+
 	mainCounter := sched.counter.Inc()
 	jobCounter := job.counter.Inc()
 	name := job.job.Name()
