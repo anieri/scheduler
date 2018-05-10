@@ -50,9 +50,17 @@ func (sched *Scheduler) Run() {
 				if now.Before(job.last.Add(job.interval)) {
 					continue
 				}
-				go job.job.Run(now)
+				go sched.runJob(job, now)
 			}
 		}
+	}
+}
+
+func (sched *Scheduler) runJob(job *schedule, now time.Time) {
+	(*job).last = now
+	if err := job.job.Run(now); err != nil {
+		// TODO: logger
+		return
 	}
 }
 
